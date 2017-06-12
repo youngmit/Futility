@@ -149,6 +149,9 @@ MODULE ExpTables
       !> @copybrief ExpTables::EXPT
       !> @copydetails ExpTables::EXPT
       PROCEDURE,PASS :: EXPT
+      !> @copybrief ExpTables::KAPPA
+      !> @copydetails ExpTables::KAPPA
+      PROCEDURE,PASS :: KAPPA
       !> @copybrief ExpTables::clear_ExpTable
       !> @copydetails ExpTables::clear_ExpTable
       PROCEDURE,PASS :: clear => clear_ExpTable
@@ -180,14 +183,16 @@ MODULE ExpTables
 !> @param x The variable
 !> @param ans The return value
 !>
-    ELEMENTAL FUNCTION EXPT(myET,x,ipol) RESULT(ans)
+  ELEMENTAL    FUNCTION EXPT(myET,x,ipol) RESULT(ans)
       CHARACTER(LEN=*),PARAMETER :: myName="EXPT"
       CLASS(ExpTableType),INTENT(IN) :: myET
       REAL(SRK),INTENT(IN) :: x
       INTEGER(SIK),INTENT(IN),OPTIONAL :: ipol
       REAL(SRK) :: ans
-
+  !    write(*,*) myET%minVal,x,myET%maxVal, &
+  !    (myET%minVal <= x .AND. x <= myET%maxVal)
       IF(myET%minVal <= x .AND. x <= myET%maxVal) THEN
+
         SELECTCASE(myET%tableType)
           CASE (SINGLE_LEVEL_EXP_TABLE)
             ans=EXPT_Single(myET,x)
@@ -206,7 +211,7 @@ MODULE ExpTables
 !                   ' up the polar angle dependent exponent table!')
             ENDIF
           CASE DEFAULT
-            ans=1._SRK-EXP(x)
+           ans=1._SRK-EXP(x)
         ENDSELECT
       ELSE
         IF(x<-700._SRK) THEN
@@ -216,6 +221,25 @@ MODULE ExpTables
         ENDIF
       ENDIF
     ENDFUNCTION
+!
+  ELEMENTAL FUNCTION KAPPA(myET,x,ipol) RESULT(ans)
+      CHARACTER(LEN=*),PARAMETER :: myName="EXPT"
+      CLASS(ExpTableType),INTENT(IN) :: myET
+      REAL(SRK),INTENT(IN) :: x
+      INTEGER(SIK),INTENT(IN),OPTIONAL :: ipol
+      REAL(SRK) :: x1,x2,x3,x4,ans
+  !    write(*,*) myET%minVal,x,myET%maxVal, &
+  !    (myET%minVal <= x .AND. x <= myET%maxVal)
+      IF( x >= -0.01_SRK) THEN
+          x1 = x*x
+          x2 = x1*x
+          x3 = x1*x1
+          ans = -1._SRK-x/2._SRK-x1/6._SRK-x2/24._SRK-x3/120._SRK
+      ELSE
+          ans=(1._SRK-EXP(x))/x
+      ENDIF
+    ENDFUNCTION
+
 !
 !-------------------------------------------------------------------------------
 !> @brief Clears a exponent table type object
@@ -278,7 +302,9 @@ MODULE ExpTables
 
       !Initialize reference parameter lists
       IF(.NOT.ExpTableType_Paramsflag) CALL ExpTables_Declare_ValidParams()
-
+      CALL eExpTable%raiseDebug(modName//'::'//myName// &
+            ' - Exponent table type is not correct input!'// &
+              ' Using default table type!')
       !Input checking
       nerror=eExpTable%getcounter(EXCEPTION_ERROR)
       IF(myET%isinit) THEN
@@ -385,6 +411,8 @@ MODULE ExpTables
           SELECTCASE(tableType)
             CASE (EXACT_EXP_TABLE)
               myET%tableType=EXACT_EXP_TABLE
+              myET%maxVal=maxVal
+              myET%minVal=minVal
             CASE(SINGLE_LEVEL_EXP_TABLE)
               CALL dmalloc0A(myET%table,minTable,maxTable)
               myET%nintervals=nintervals
@@ -647,7 +675,7 @@ MODULE ExpTables
 
       !Set names for required parameters
       !Set defaults for optional parameters
-      CALL ExpTableType_optParams%add('ExpTables -> tabletype',LINEAR_EXP_TABLE, &
+      CALL ExpTableType_optParams%add('ExpTables -> tabletype',EXACT_EXP_TABLE, &
         'The default ExpTable is just a linear level lookup table.')
       CALL ExpTableType_optParams%add('ExpTables -> minval',-10._SRK, &
         'The default minimum value in the exponential table.')
@@ -659,7 +687,6 @@ MODULE ExpTables
         'The default value for the error in the exponential table.')
       CALL ExpTableType_optParams%add('ExpTables -> errorflag',.FALSE., &
         'The default value for the error in the exponential table.')
-
     ENDSUBROUTINE ExpTables_Declare_ValidParams
 
 !-------------------------------------------------------------------------------
