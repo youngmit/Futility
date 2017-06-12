@@ -140,6 +140,9 @@ MODULE ExpTables
     !> Three dimensional table storing the slope and intercept
     !> dimension([1(slope),2(intercept)],nx,npol)
     REAL(SRK),ALLOCATABLE :: table3D(:,:,:)
+    !>
+    !>
+    REAL(SRK),ALLOCATABLE :: table2DKappa(:,:)
 !
 !List of type bound prodedures
     CONTAINS
@@ -183,7 +186,7 @@ MODULE ExpTables
 !> @param x The variable
 !> @param ans The return value
 !>
-  ELEMENTAL    FUNCTION EXPT(myET,x,ipol) RESULT(ans)
+  ELEMENTAL FUNCTION EXPT(myET,x,ipol) RESULT(ans)
       CHARACTER(LEN=*),PARAMETER :: myName="EXPT"
       CLASS(ExpTableType),INTENT(IN) :: myET
       REAL(SRK),INTENT(IN) :: x
@@ -227,16 +230,21 @@ MODULE ExpTables
       CLASS(ExpTableType),INTENT(IN) :: myET
       REAL(SRK),INTENT(IN) :: x
       INTEGER(SIK),INTENT(IN),OPTIONAL :: ipol
-      REAL(SRK) :: x1,x2,x3,x4,ans
+      REAL(SRK) :: x1,x2,x3,ans
+      INTEGER(SIK)         :: i
   !    write(*,*) myET%minVal,x,myET%maxVal, &
   !    (myET%minVal <= x .AND. x <= myET%maxVal)
-      IF( x >= -0.01_SRK) THEN
-          x1 = x*x
-          x2 = x1*x
-          x3 = x1*x1
-          ans = -1._SRK-x/2._SRK-x1/6._SRK-x2/24._SRK-x3/120._SRK
+      IF(x >= -0.01_SRK) THEN
+        x1 = x*x
+        x2 = x1*x
+        x3 = x1*x1
+        ans = -1._SRK-x/2._SRK-x1/6._SRK-x2/24._SRK-x3/120._SRK
+      ELSEIF (myET%minVal <= x .AND. x <= myET%maxVal) THEN
+        i=FLOOR(x*myET%rdx)
+        !ans=myET%table(i)*x+myET%table2rd(i)
+        ans=myET%table2DKappa(1,i)*x+myET%table2DKappa(2,i)
       ELSE
-          ans=(1._SRK-EXP(x))/x
+         ans = (1._SRK- EXP(x))/x
       ENDIF
     ENDFUNCTION
 
@@ -252,6 +260,7 @@ MODULE ExpTables
       IF(ALLOCATED(myET%table3rd)) CALL demallocA(myET%table3rd)
       IF(ALLOCATED(myET%table2D)) CALL demallocA(myET%table2D)
       IF(ALLOCATED(myET%table3D)) CALL demallocA(myET%table3D)
+      IF(ALLOCATED(myET%table2DKappa)) CALL demallocA(myET%table2DKappa)
       myET%tableType=-1
       myET%nintervals=-1
       myET%minTable=0
@@ -411,8 +420,6 @@ MODULE ExpTables
           SELECTCASE(tableType)
             CASE (EXACT_EXP_TABLE)
               myET%tableType=EXACT_EXP_TABLE
-              myET%maxVal=maxVal
-              myET%minVal=minVal
             CASE(SINGLE_LEVEL_EXP_TABLE)
               CALL dmalloc0A(myET%table,minTable,maxTable)
               myET%nintervals=nintervals
@@ -543,7 +550,19 @@ MODULE ExpTables
 !                 myET%table3D(1,i,ipol)=myET%table3D(1,i,ipol)*myET%dx
 !               ENDDO
 !             ENDDO
-            ENDSELECT
+          ENDSELECT
+            
+          CALL dmalloc0A(myET%table2DKappa,1,2,minTable,maxTable)
+          x1=minVal
+          y1=(1._SRK-EXP(x1))/x1
+          DO i=minTable,maxTable
+            x2=x1+myET%dx
+            y2=(1._SRK-EXP(x2))/x2
+            myET%table2DKappa(1,i)=(y2-y1)*myET%rdx
+            myET%table2DKappa(2,i)=y1-myET%table2DKappa(1,i)*x1
+            x1=x2
+            y1=y2
+          ENDDO
           myET%isinit=.TRUE.
           CALL tmpList%clear()
         ENDIF
@@ -675,7 +694,7 @@ MODULE ExpTables
 
       !Set names for required parameters
       !Set defaults for optional parameters
-      CALL ExpTableType_optParams%add('ExpTables -> tabletype',EXACT_EXP_TABLE, &
+      CALL ExpTableType_optParams%add('ExpTables -> tabletype',LINEAR_EXP_TABLE, &
         'The default ExpTable is just a linear level lookup table.')
       CALL ExpTableType_optParams%add('ExpTables -> minval',-10._SRK, &
         'The default minimum value in the exponential table.')
@@ -703,3 +722,4 @@ MODULE ExpTables
     ENDSUBROUTINE ExpTables_Clear_ValidParams
 !
 ENDMODULE ExpTables
+
