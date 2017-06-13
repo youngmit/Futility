@@ -143,6 +143,10 @@ MODULE ExpTables
     !>
     !>
     REAL(SRK),ALLOCATABLE :: table2DKappa(:,:)
+
+    !> Three dimensional table storing the slope and intercept
+    !> dimension([1(slope),2(intercept)],nx,npol)
+    REAL(SRK),ALLOCATABLE :: table3DKappa(:,:,:)
 !
 !List of type bound prodedures
     CONTAINS
@@ -261,6 +265,7 @@ MODULE ExpTables
       IF(ALLOCATED(myET%table2D)) CALL demallocA(myET%table2D)
       IF(ALLOCATED(myET%table3D)) CALL demallocA(myET%table3D)
       IF(ALLOCATED(myET%table2DKappa)) CALL demallocA(myET%table2DKappa)
+      IF(ALLOCATED(myET%table3DKappa)) CALL demallocA(myET%table3DKappa)
       myET%tableType=-1
       myET%nintervals=-1
       myET%minTable=0
@@ -477,6 +482,18 @@ MODULE ExpTables
                 x1=x2
                 y1=y2
               ENDDO
+                          
+              CALL dmalloc0A(myET%table2DKappa,1,2,minTable,maxTable)
+              x1=minVal
+              y1=(1._SRK-EXP(x1))/x1
+              DO i=minTable,maxTable
+                x2=x1+myET%dx
+                y2=(1._SRK-EXP(x2))/x2
+                myET%table2DKappa(1,i)=(y2-y1)*myET%rdx
+                myET%table2DKappa(2,i)=y1-myET%table2DKappa(1,i)*x1
+                x1=x2
+                y1=y2
+              ENDDO
             CASE(ORDER2_EXP_TABLE)
               CALL dmalloc0A(myET%table,minTable,maxTable)
               CALL dmalloc0A(myET%table2rd,minTable,maxTable)
@@ -544,6 +561,22 @@ MODULE ExpTables
                 ENDDO
               ENDDO
 
+              CALL dmalloc0A(myET%table3DKappa,1,2,minTable,maxTable,1,npol)
+              x1=minVal
+
+              DO ipol=1,npol
+                x1=minVal
+                y1=(1._SRK-EXP(x1*rsinpol(ipol)))/x1
+                DO i=minTable,maxTable
+                  x2=x1+myET%dx
+                  y2=(1._SRK-EXP(x2*rsinpol(ipol)))/x2
+                  myET%table3DKappa(1,i,ipol)=(y2-y1)*myET%rdx
+                  myET%table3DKappa(2,i,ipol)=y1-myET%table3DKappa(1,i,ipol)*x1
+                  x1=x2
+                  y1=y2
+                ENDDO
+              ENDDO
+
               !The following loop structure may not be necessary.
 !             DO ipol=1,npol
 !               DO i=minTable,maxTable
@@ -551,18 +584,7 @@ MODULE ExpTables
 !               ENDDO
 !             ENDDO
           ENDSELECT
-            
-          CALL dmalloc0A(myET%table2DKappa,1,2,minTable,maxTable)
-          x1=minVal
-          y1=(1._SRK-EXP(x1))/x1
-          DO i=minTable,maxTable
-            x2=x1+myET%dx
-            y2=(1._SRK-EXP(x2))/x2
-            myET%table2DKappa(1,i)=(y2-y1)*myET%rdx
-            myET%table2DKappa(2,i)=y1-myET%table2DKappa(1,i)*x1
-            x1=x2
-            y1=y2
-          ENDDO
+
           myET%isinit=.TRUE.
           CALL tmpList%clear()
         ENDIF
